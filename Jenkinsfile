@@ -3,7 +3,9 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "aisalkyn85/manual-app"
-        IMAGE_TAG = "v1"
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        KUBE_DEPLOYMENT = "manual-app"
+        KUBE_CONTAINER = "manual-app"
     }
 
     stages {
@@ -17,12 +19,14 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
+                echo "Installing npm dependencies..."
                 sh 'npm install'
             }
         }
 
         stage('Build Docker Image') {
             steps {
+                echo "Building Docker image..."
                 sh """
                 docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
                 """
@@ -37,7 +41,7 @@ pipeline {
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh """
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
                     """
                 }
             }
@@ -45,6 +49,7 @@ pipeline {
 
         stage('Push Image') {
             steps {
+                echo "Pushing image to DockerHub..."
                 sh """
                 docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
                 """
@@ -53,17 +58,33 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
+                echo "Updating Kubernetes deployment..."
                 sh """
-                kubectl set image deployment/manual-app \
-                manual-app=${DOCKER_IMAGE}:${IMAGE_TAG}
+                kubectl set image deployment/${KUBE_DEPLOYMENT} \
+                ${KUBE_CONTAINER}=${DOCKER_IMAGE}:${IMAGE_TAG} --record
+                """
+            }
+        }
+
+        stage('Verify Rollout') {
+            steps {
+                echo "Checking rollout status..."
+                sh """
+                kubectl rollout status deployment/${KUBE_DEPLOYMENT}
                 """
             }
         }
     }
 
     post {
+        success {
+            echo "Deployment successful!"
+        }
+        failure {
+            echo "Pipeline failed!"
+        }
         always {
-            echo "Pipeline completed."
+            echo "Pipeline finished."
         }
     }
 }
