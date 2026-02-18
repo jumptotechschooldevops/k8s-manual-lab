@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = "aisalkyn85/manual-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        CD_REPO = "https://github.com/jumptotechschooldevops/manual-app-helm.git"
+        CD_REPO = "jumptotechschooldevops/manual-app-helm"
     }
 
     stages {
@@ -59,31 +59,38 @@ pipeline {
             steps {
                 echo "Updating Helm values.yaml in CD repository..."
 
-                sh """
-                rm -rf cd-repo
-                git clone ${CD_REPO} cd-repo
-                cd cd-repo
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_PASS'
+                )]) {
 
-                # Update image tag in values.yaml
-                sed -i 's/tag:.*/tag: "${IMAGE_TAG}"/' values.yaml
+                    sh """
+                    rm -rf cd-repo
+                    git clone https://${GIT_USER}:${GIT_PASS}@github.com/${CD_REPO}.git cd-repo
+                    cd cd-repo
 
-                git config user.email "jenkins@jumptotech.com"
-                git config user.name "jenkins"
+                    # Update image tag
+                    sed -i 's/tag:.*/tag: "${IMAGE_TAG}"/' values.yaml
 
-                git add values.yaml
-                git commit -m "Update image tag to ${IMAGE_TAG}"
-                git push
-                """
+                    git config user.email "jenkins@jumptotech.com"
+                    git config user.name "jenkins"
+
+                    git add values.yaml
+                    git commit -m "Update image tag to ${IMAGE_TAG}"
+                    git push
+                    """
+                }
             }
         }
     }
 
     post {
         success {
-            echo "CI Pipeline completed successfully!"
+            echo "CI + CD Pipeline completed successfully!"
         }
         failure {
-            echo "CI Pipeline failed!"
+            echo "Pipeline failed!"
         }
         always {
             echo "Pipeline finished."
