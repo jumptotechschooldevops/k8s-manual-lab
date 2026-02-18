@@ -4,13 +4,14 @@ pipeline {
     environment {
         DOCKER_IMAGE = "aisalkyn85/manual-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
+        CD_REPO = "https://github.com/jumptotechschooldevops/manual-app-helm.git"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo "Cloning repository..."
+                echo "Cloning CI repository..."
                 checkout scm
             }
         }
@@ -53,6 +54,28 @@ pipeline {
                 """
             }
         }
+
+        stage('Update CD Repo') {
+            steps {
+                echo "Updating Helm values.yaml in CD repository..."
+
+                sh """
+                rm -rf cd-repo
+                git clone ${CD_REPO} cd-repo
+                cd cd-repo
+
+                # Update image tag in values.yaml
+                sed -i 's/tag:.*/tag: "${IMAGE_TAG}"/' values.yaml
+
+                git config user.email "jenkins@jumptotech.com"
+                git config user.name "jenkins"
+
+                git add values.yaml
+                git commit -m "Update image tag to ${IMAGE_TAG}"
+                git push
+                """
+            }
+        }
     }
 
     post {
@@ -67,3 +90,4 @@ pipeline {
         }
     }
 }
+
